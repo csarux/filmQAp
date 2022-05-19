@@ -1,0 +1,3 @@
+#!/bin/bash
+
+jupyter labextension install jupyterlab-dash jupyter-bbox-widget
