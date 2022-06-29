@@ -286,7 +286,7 @@ def nlmf(imfile=None, config=None):
                          patch_size = int(config['NonLocalMeans']['PatchSize']),
                          patch_distance = int(config['NonLocalMeans']['PatchDistance']),
                          h=float(config['NonLocalMeans']['h']), 
-                         channel_axis=bool(config['NonLocalMeans']['ChannelAxis']))
+                         channel_axis=int(config['NonLocalMeans']['ChannelAxis']))
     udim=img_as_uint(dim)
     
     return udim

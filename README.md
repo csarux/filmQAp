@@ -1,6 +1,6 @@
 # filmQAp
-Radiochromic film dosimetry
+Radiochromic Film Dosimetry
 
-Two python modules implementing tools to process radiochromic films in jupyter notebooks.
+Two python modules implementing tools to process radiochromic films in jupyter notebooks following a single scan protocol.
 
-The dose calcualtion uses a response curve based in the growth of two polymer color phases combined with a non-local means algorithm.
+The dose calculation uses a response curve based in the growth of two polymer color phases combined with a non-local means algorithm. 
