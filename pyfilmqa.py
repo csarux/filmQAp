@@ -328,7 +328,7 @@ def calf(D, f, phir, kr, phib, kb):
 
 def iratf(d, a, b, c):
     """
-    The calibration function following a sensitometric model bases in rational functions
+    The calibration function following a sensitometric model bases in rational functions and using the optical density as variable
     
     ...
     
@@ -354,6 +354,70 @@ def iratf(d, a, b, c):
     """
     
     return (a - c * 10**-d)/(10**-d - b)
+    
+def iratSf(S, a, b, c, Sb):
+    """
+    The calibration function following a sensitometric model bases in rational functions and using the digital signal as variable
+    
+    ...
+    
+    Attributes
+    ----------
+    S : unsigned int 16
+        The digital signal measured by the scanner in every color channel
+        
+    a : float64
+        First rational function parameter
+        
+    b : float64
+        Second rational function parameter
+    
+    c : float64
+        Third rational function parameter
+        
+    Sb : unsigned int 16
+        The base digital signal determined for the film
+
+    Returns
+    -------
+    D : float64
+        The abosrbed dose D corresponding to the digital signal S in each channel following the sensitometry model based on rational functions
+    
+    """
+    
+    return (a - c * S/Sb)/(S/Sb - b)
+    
+def deriv_iratSf(S, a, b, c, Sb):
+    """
+    The derivative of the calibration function following a sensitometric model bases in rational functions and using the digital signal as variable
+    
+    ...
+    
+    Attributes
+    ----------
+    S : unsigned int 16
+        The digital signal measured by the scanner in every color channel
+        
+    a : float64
+        First rational function parameter
+        
+    b : float64
+        Second rational function parameter
+    
+    c : float64
+        Third rational function parameter
+        
+    Sb : unsigned int 16
+        The base digital signal determined for the film
+
+    Returns
+    -------
+    D : float64
+        The abosrbed dose D corresponding to the digital signal S in each channel following the sensitometry model based on rational functions
+    
+    """
+    
+    return (c * S/Sb * (1 - 1/Sb) + c * b/Sb - a)/(S/Sb - b)**2
     
 def readCalParms(config=None):
     """
@@ -816,6 +880,137 @@ def mphnlmprocf(imfile=None, config=None, caldf=None):
 
     # Return the dose image
     return mphnlmprocim
+    
+def mayermltchprocf(imfile=None, config=None, caldf=None, ccdf=None):
+    """
+    A function to process the dose distribution image using the Mayer implementation of the Micke multichannel method
+    
+    ...
+    
+    Attributes
+    ----------
+    imfile : str
+        The name of the image file, the file containing the scanned image of the dose distribution, the calibration strip and the base strip in TIFF format.
+        
+    config : ConfigParser
+        An object with the functionalities of the configparser module
+
+    caldf : pandas DataFrame
+        The current scan calibration parameters
+        
+    ccdf : pandas DataFrame
+        A data structure containing the relevant geometric parameters for the spatial correction
+
+    Returns
+    -------
+    mayermltchprocim : 2D numpy arrray 
+        The dose distribution
+    """
+    
+    dosefilename = Path(imfile)
+    dosefilename = dosefilename.with_suffix('.Film.tif')
+    
+    # Read the scanned dose image, and split the digital signal of each channel
+    im = imread(dosefilename)
+    Rim = im[..., 0]
+    Gim = im[..., 1]
+    Bim = im[..., 2]
+    
+    # Current multiphase calibration parameters
+    rcalps = caldf.iloc[0].values
+    gcalps = caldf.iloc[1].values
+    bcalps = caldf.iloc[2].values
+
+    # Background signal for every color channel
+
+    SbR, SbG, SbB = 2**16/10**rcalps[0], 2**16/10**gcalps[0], 2**16/10**bcalps[0]
+    
+    # Rational approximation
+    
+    # Define models
+    rratfmodel = Model(iratf)
+    gratfmodel = Model(iratf)
+    bratfmodel = Model(iratf)
+    
+    # Initialize parameters
+    rratparams = rratfmodel.make_params(
+        a = 0.1,
+        b = 0.1,
+        c = 0.1
+    )
+    
+    gratparams = gratfmodel.make_params(
+        a = 0.1,
+        b = 0.1,
+        c = 0.1
+    )
+    
+    bratparams = bratfmodel.make_params(
+        a = 0.1,
+        b = 0.1,
+        c = 0.1
+    ) 
+    
+    
+    # Generate calibration points
+    
+    vDrat = np.array([0.5, 0.75, 1., 1.25, 1.5, 2., 3., 4., 5., 7., 9.])
+    
+    vdrrat =  calf(vDrat, *rcalps)
+    vdgrat =  calf(vDrat, *gcalps)
+    vdbrat =  calf(vDrat, *bcalps)
+    
+    # Fit
+    rratfit = rratfmodel.fit(data=vDrat, params=rratparams, d=vdrrat)
+    gratfit = gratfmodel.fit(data=vDrat, params=gratparams, d=vdgrat)
+    bratfit = bratfmodel.fit(data=vDrat, params=bratparams, d=vdbrat)
+    
+    # Rational calibration paramters
+    aR, bR, cR = [k.value for k in rratfit.params.values()]
+    aG, bG, cG = [k.value for k in gratfit.params.values()]
+    aB, bB, cB = [k.value for k in bratfit.params.values()]
+    
+    # Dose calculation
+    print('Dose calculation (Mayer implementation multichannel algorithm):')
+    adDr = np.zeros_like(dim[...,0])
+    adDg = np.zeros_like(dim[...,1])
+    adDb = np.zeros_like(dim[...,2])
+    nrs = dim.shape[1]
+    for j in tqdm(np.arange(nrs)):
+        xc = np.abs(ccdf.o - ccdf.c) * ccdf.s / 25.4
+        x = np.abs(ccdf.o - (ccdf.p0 + j)) * ccdf.s / 25.4
+        npx = dim.shape[0]
+        for i in np.arange(npx):
+            
+            # Red channel
+            f, phir, kr, phib, kb = rcalps
+            rcalcps = np.array([f, phir * phiRrf(x)/phiRrf(xc), kr, phib * phiRbf(x)/phiRbf(xc), kb])
+            adDr[i, j] = Ricalf(dim[i, j, 0], rcalcps, rratps)
+            
+            # Green channel
+            f, phir, kr, phib, kb = gcalps
+            gcalcps = np.array([f, phir * phiGrf(x)/phiGrf(xc), kr, phib * phiGbf(x)/phiGbf(xc), kb])
+            adDg[i, j] = Gicalf(dim[i, j, 1], gcalcps, rratps)
+            
+            # Blue channel
+            f, phir, kr, phib, kb = bcalps
+            bcalcps = np.array([f, phir * phiBrf(x)/phiBrf(xc), kr, phib * phiBbf(x)/phiBbf(xc), kb])
+            adDb[i, j] = Bicalf(dim[i, j, 2], bcalcps, rratps)
+    
+    Dmax = float(config['DosePlane']['Dmax'])
+    wr, wg, wb = float(config['NonLocalMeans']['wRed']), float(config['NonLocalMeans']['wGreen']), float(config['NonLocalMeans']['wBlue'])
+    wT = wr + wg + wb
+
+    mphspcnlmprocim = (wr*adDr + wg*adDg + wb*adDb)/wT
+
+    mphspcnlmprocim = np.nan_to_num(mphspcnlmprocim, posinf=1e10, neginf=-1e10)
+
+    mphspcnlmprocim[mphspcnlmprocim < 0] = 0
+
+    mphspcnlmprocim[mphspcnlmprocim > Dmax] = Dmax
+
+    # Return the dose image
+    return mphspcnlmprocim
     
 def mphspcnlmprocf(imfile=None, config=None, caldf=None, ccdf=None):
     """
