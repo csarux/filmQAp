@@ -903,7 +903,7 @@ def mayermltchprocf(imfile=None, config=None, caldf=None, ccdf=None):
 
     Returns
     -------
-    Dopt : 2D numpy arrray 
+    mayermltchprocim : 2D numpy arrray 
         The dose distribution
     """
     
@@ -922,6 +922,7 @@ def mayermltchprocf(imfile=None, config=None, caldf=None, ccdf=None):
     bcalps = caldf.iloc[2].values
 
     # Background signal for every color channel
+
     SbR, SbG, SbB = 2**16/10**rcalps[0], 2**16/10**gcalps[0], 2**16/10**bcalps[0]
     
     # Rational approximation
@@ -970,25 +971,12 @@ def mayermltchprocf(imfile=None, config=None, caldf=None, ccdf=None):
     aB, bB, cB = [k.value for k in bratfit.params.values()]
     
     # Dose calculation
-    print('Dose calculation (Mayer implementation of the independent perturbation multichannel algorithm):')
+    print('Dose calculation (Mayer implementation multichannel algorithm):')
+    DR = iratSf(Rim, aR, bR, cR, SbR)
+    DG = iratSf(Gim, aG, bG, cG, SbG)
+    DB = iratSf(Bim, aB, bB, cB, SbB)
 
-    # Single channel doses from rational calibration
-    DR = iratSf(Rim, aR, bR, cR, 2**16)
-    DG = iratSf(Gim, aG, bG, cG, 2**16)
-    DB = iratSf(Bim, aB, bB, cB, 2**16)
-
-    Dave = (DR + DG + DB) / 3
-
-    aR = deriv_iratSf(Rim, aR, bR, cR, 2**16)
-    aG = deriv_iratSf(Gim, aG, bG, cG, 2**16)
-    aB = deriv_iratSf(Bim, aB, bB, cB, 2**16)
-
-    RS = (aR + aG + aB)**2/(aR**2 + aG**2 + aB**2)/3
-
-    Dopt = Dave - RS * (aR * DR + aG * DG + aB * DB) / ((aR + aG + aB) / (1 - RS)) 
-
-    print('Finished!')
-    return DR, DG, DB, Dave, Dopt
+    return [DR, DG, DB]
     '''
     adDr = np.zeros_like(dim[...,0])
     adDg = np.zeros_like(dim[...,1])
