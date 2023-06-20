@@ -110,10 +110,11 @@ def tiff2png():
 
 async def uploaderf():
     uploaderValue = await wait_for_change(uploader, 'value')
-    filename = list(uploaderValue)[0]
+    tifffile = list(uploaderValue)[0]
+    filename = tifffile.name
     st.setimfile(filename)
     with open(filename, 'wb') as output_file:
-        content = uploaderValue[filename]['content']
+        content = tifffile.content
         output_file.write(content)
         outimg.append_stdout('Archivo subido: ' + filename + '\n')
     if st.impath.suffix == '.tif':
@@ -121,10 +122,11 @@ async def uploaderf():
 
 async def dcmprocessorf():
     processorValue = await wait_for_change(processor, 'value')
-    filename = list(processorValue)[0]
+    dcmfile = list(processorValue)[0]
+    filename = dcmfile.name
     st.setdcmfile(filename)
     with open(filename, 'wb') as output_file:
-        content = processorValue[filename]['content']
+        content = dcmfile.content
         output_file.write(content)
         outdcm.append_stdout('Archivo subido: ' + filename + '\n')
     if st.dcmpath.suffix == '.dcm':
@@ -446,26 +448,35 @@ def dcm2dxf():
     pxsp = fqa.DICOMPixelSpacing(dcmfile=st.dcmfilename)
     imsz = fqa.DICOMImageSize(dcmfile=st.dcmfilename)
     pDim = fqa.DICOMDose(dcmfile=st.dcmfilename)
-    dxffilePath = Path('/home/radiofisica/Shares/Radiofisica/Medidas Pacientes/IMRT/' + demodict['PatientId1'] + '/Plan.dxf')
+    
+    if 'IMRT' in st.config['DEFAULT']['dxfPlanExportPath']:
+        dxffilePath = Path(st.config['DEFAULT']['dxfPlanxportPath'] + demodict['PatientId1'] + '/Plan.dxf')
+    else:
+        dxffilePath = Path(st.config['DEFAULT']['dxfPlanExportPath'] + 'Plan.dxf')
+        
     fqa.dxfWriter(Data=pDim, dxfFileName=dxffilePath, DataOrigin=st.dcmfilename,
                   AcqType='Predicted Portal', PatientId1=demodict['PatientId1'],
                   PatientId2=demodict['PatientId1'], LastName=demodict['LastName'],
                   FirstName=demodict['FirstName'], pxsp=pxsp, imsz=imsz)
-    outdcm.append_stdout('Exportado archivo Radiofisica/Medidas Pacientes/IMRT/'  + demodict['PatientId1'] + '/Plan.dxf')
-    print('Exportado archivo Radiofisica/Medidas Pacientes/IMRT/'  + demodict['PatientId1'] + '/Plan.dxf')
+    outdcm.append_stdout('Exportado archivo ' + str(dxffilePath))
+    print('Exportado archivo ' + str(dxffilePath))
 
 def tif2dxf():
     print('Convertir a formato dxf el plano de dosis medido con película...')
     demodict = fqa.DICOMDemographics(dcmfile=st.dcmfilename)
     pxsp = fqa.TIFFPixelSpacing(st.imfilename)
     imsz = fqa.DoseImageSize(st.oDim)
-    dxffilePath = Path('/home/radiofisica/Shares/Radiofisica/Medidas Pacientes/IMRT/' + demodict['PatientId1'] + '/Film.dxf')
+    
+    if 'IMRT' in st.config['DEFAULT']['dxfFilmExportPath']:
+        dxffilePath = Path(st.config['DEFAULT']['dxfFilmExportPath'] + demodict['PatientId1'] + '/Film.dxf')
+    else:
+        dxffilePath = Path(st.config['DEFAULT']['dxfFilmExportPath'] + 'Film.dxf')
 
     fqa.dxfWriter(Data=st.oDim, dxfFileName=dxffilePath, DataOrigin=st.imfilename,
                   AcqType='Acquired Portal', PatientId1=demodict['PatientId1'],
                   PatientId2=demodict['PatientId1'], LastName=demodict['LastName'],
                   FirstName=demodict['FirstName'], pxsp=pxsp, imsz=imsz)
-    print('Exportado archivo Radiofisica/Medidas Pacientes/IMRT/'  + demodict['PatientId1'] + '/Film.dxf')
+    print('Exportado archivo ' + str(dxffilePath))
 
 def procesarPelicula():
     print('Determinación de las coordenadas para la corrección lateral...')
